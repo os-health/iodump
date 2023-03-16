@@ -1,0 +1,6 @@
+#!/bin/bash
+
+if [[ "%{current_kver}str" != $(uname -r)"str" ]];then
+    echo "current kernel version $(uname -r) is not supported."
+    exit 201
+fi

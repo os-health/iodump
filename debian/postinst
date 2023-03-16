@@ -1,0 +1,21 @@
+#!/bin/bash
+
+ps h -C iodump -o pid                        && killall iodump
+[ -e /sys/module/kiodump/parameters/enable ] && echo N > /sys/module/kiodump/parameters/enable
+lsmod | grep -qw kiodump                     && modprobe -r kiodump
+if [ -e "/usr/lib/iodump/kiodump.ko" ];then
+    install -d /lib/modules/%{current_kver}/extra/os_health/iodump/
+    install /usr/lib/iodump/kiodump.ko /lib/modules/%{current_kver}/extra/os_health/iodump/kiodump.ko
+    /sbin/depmod -aeF /boot/System.map-%{current_kver} %{current_kver} > /dev/null
+    modprobe kiodump
+    if [ $? -ne 0 ];then
+        echo "kiodump.ko modprobe is failed, check the dmesg info."
+        exit 203
+    fi
+else
+    echo "The /usr/lib/iodump/kiodump.ko file does not exist in the iodump rpm package"
+    exit 202
+fi
+if [ -d /etc/modules-load.d/ ];then
+    install /usr/src/os_health/iodump/kiodump.conf /etc/modules-load.d/kiodump.conf
+fi

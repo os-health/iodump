@@ -1,0 +1,10 @@
+#!/bin/bash
+
+if [ "$1" = "0" ]; then
+    ps h -C iodump -o pid                        && killall iodump
+    [ -e /sys/module/kiodump/parameters/enable ] && echo N > /sys/module/kiodump/parameters/enable
+    lsmod | grep -qw kiodump                     && modprobe -r kiodump
+    rm -f /lib/modules/%{current_kver}/extra/os_health/iodump/kiodump.ko
+    /sbin/depmod -aeF /boot/System.map-%{current_kver} %{current_kver} > /dev/null
+    rm -f /etc/modules-load.d/kiodump.conf
+fi

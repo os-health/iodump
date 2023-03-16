@@ -1,0 +1,6 @@
+Package: iodump-%{current_kver}
+Version: 1.0.1-1
+Architecture: amd64
+Section: utils
+Maintainer: Miles Wen
+Description: log the system details
