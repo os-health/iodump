@@ -448,7 +448,12 @@ static struct inode *bio2inode(struct bio *bio, struct inode **inode)
 
 	bv_page = (struct page *)(bio->bi_io_vec[0].bv_page);
 
-	if (IS_ERR_OR_NULL(bv_page) || PageSlab(bv_page) || PageSwapCache(bv_page))
+	if (IS_ERR_OR_NULL(bv_page) || PageSlab(bv_page)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+		|| folio_test_swapcache(page_folio(bv_page)))
+#else
+		|| PageSwapCache(bv_page))
+#endif
 		goto end;
 
 	addr_space = (struct address_space *)(bv_page->mapping);
