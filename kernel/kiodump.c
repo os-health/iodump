@@ -929,7 +929,10 @@ static void blk_trace_rq_handler(struct request_queue *q, struct request *rq)
 
 	iit.sector = rq->__sector;
 	iit.partno = 0;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+	if (rq->part)
+		iit.partno = bdev_partno(rq->part);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
 	if (rq->part)
 		iit.partno = rq->part->bd_partno;
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
