@@ -9,7 +9,7 @@ else
   KERNELDIR:=/lib/modules/$(KERNELVER)/build
 endif
 CURDIR:=$(shell pwd)
-DISTRIBUTION_ID:=$(shell [ -f /etc/os-release ] && source /etc/os-release && echo $${ID})
+DISTRIBUTION_ID:=$(shell [ -f /etc/os-release ] && . /etc/os-release && echo $${ID})
 ifeq ($(DISTRIBUTION_ID),)
 DISTRIBUTION_ID:=$(shell [ -f /etc/centos-release ] && echo -n "centos")
 endif
