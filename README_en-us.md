@@ -66,22 +66,29 @@ To use, there are several methods:
 
 ```bash
 $ yum install rpm-build rpmdevtools git
-$ rpmdev-setuptree
-$ cd ~/
+$ cd /tmp/                                        # work dir
 $ git clone https://gitee.com/anolis/iodump.git
-$ cp iodump/spec/iodump.spec ~/rpmbuild/SPECS/
+$ rpmdev-setuptree
 $ tar -zcvf ~/rpmbuild/SOURCES/iodump-$(cat iodump/spec/iodump.spec |grep Version |awk '{print $2}').tar.gz iodump
+$ cp iodump/spec/iodump.spec ~/rpmbuild/SPECS/
 $ rpmbuild -bb ~/rpmbuild/SPECS/iodump.spec
 $ cd ~/rpmbuild/RPMS/x86_64/
-$ sudo rpm -ivh iodump-$(uname -r)-*.an8.x86_64.rpm
-$ sudo rpm -e iodump-$(uname -r)                   # remove package
+$ sudo rpm -ivh $(ls)
+$ sudo rpm -e iodump-$(uname -r)                  # remove package
 ```
 
-The iodump tools are essentially kernel driver modules. RPM packages generated on one specific kernel version will not work properly on a different kernel version. Here, we recommend using the following RPM query command to distinguish the contents of name, version, release and ARCH of an RPM package. We used three consecutive horizontal lines to separate the different parts, and the results were obvious. 
+　　The iodump tools are essentially kernel driver modules. RPM packages generated on one specific kernel version will not work properly on a different kernel version. Here, we recommend using the following RPM query command to distinguish the contents of name, version, release and ARCH of an RPM package. We used three consecutive horizontal lines to separate the different parts, and the results were obvious. 
 
 ```bash
-$ rpm -qp iodump-4.19.91-24.8.an8.x86_64-1.0.1-1.an8.x86_64.rpm --queryformat="%{name}---%{version}---%{release}---%{arch}\n"   
-iodump-4.19.91-24.8.an8.x86_64---1.0.1---1.an8---x86_64
+$ rpm -qp iodump-4.19.91-24.8-1.0.1-1.an8.x86_64.rpm --queryformat="%{name}---%{version}---%{release}---%{arch}\n"   
+iodump-4.19.91-24.8---1.0.1---1.an8---x86_64
+```
+
+　　If you want to specify the version of the kernel-devel package, you can use the following rpmbuild command to pass in the kernel version information as a macro parameter.
+
+```bash
+$ rpmbuild -bb ~/rpmbuild/SPECS/iodump.spec --define "%kver $(uname -r)"
+$ rpmbuild -bb ~/rpmbuild/SPECS/iodump.spec --define "%kver 4.19.91-24.8.an8.x86_64"
 ```
 
 <a name="AnolisOS-CentOS2"></a>
@@ -120,15 +127,16 @@ iodump-4.19.91-24.8.an8.x86_64---1.0.1---1.an8---x86_64
 ```bash
 $ rpm -ivh --force kernel-devel-4.19.91-25.8.an8.x86_64.rpm kernel-devel-4.19.91-26.an8.x86_64.rpm
 $ yum install rpm-build rpmdevtools git
-$ rpmdev-setuptree
-$ cd ~/
+$ cd /tmp/                                        # work dir
 $ git clone https://gitee.com/anolis/iodump.git
+$ rpmdev-setuptree
+$ tar -zcvf ~/rpmbuild/SOURCES/iodump-$(cat iodump/spec/distribution.spec |grep Version |awk '{print $2}').tar.gz iodump
 $ cp iodump/spec/distribution.spec ~/rpmbuild/SPECS/
-$ tar -zcvf ~/rpmbuild/SOURCES/iodump-$(cat iodump/spec/iodump.spec |grep Version |awk '{print $2}').tar.gz iodump
 $ rpmbuild -bb ~/rpmbuild/SPECS/distribution.spec
 $ cd ~/rpmbuild/RPMS/x86_64/
-$ sudo rpm -ivh iodump-*.an8.x86_64.rpm
-$ sudo rpm -e iodump                                           # remove package
+$ rpm -qpl $(ls) | grep kiodump                   # display all version kiodump 
+$ sudo rpm -ivh $(ls)
+$ sudo rpm -e iodump                              # remove package
 ```
 
 <a name="Ubuntu"></a>

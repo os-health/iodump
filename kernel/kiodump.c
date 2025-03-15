@@ -371,7 +371,7 @@ void inode2vfsmount(struct inode *inode, struct vfsmount **vfsmnt)
 	head = &(inode->i_sb->s_mounts);
 	if (IS_ERR_OR_NULL(head))
 		return;
-	for (pos = head->next; pos != head; pos = pos->next) {
+	for (pos = head->next; pos != head && !IS_ERR_OR_NULL(pos); pos = pos->next) {
 		mnt = container_of(pos, struct mount, mnt_instance);
 		if (!IS_ERR_OR_NULL(mnt)) {
 			*vfsmnt = &(mnt->mnt);
@@ -435,7 +435,7 @@ static struct inode *bio2inode(struct bio *bio, struct inode **inode)
 		goto end;
 	if (!bio->bi_vcnt)
 		bio = (struct bio *)bio->bi_private;   // bio chain
-	if (IS_ERR_OR_NULL(bio))
+	if (IS_ERR_OR_NULL(bio) || (!virt_addr_valid(bio)))
 		goto end;
 	if (!bio->bi_vcnt)
 		goto end;
@@ -446,24 +446,23 @@ static struct inode *bio2inode(struct bio *bio, struct inode **inode)
 #endif
 		goto end;
 
+	if (IS_ERR_OR_NULL(bio->bi_io_vec) || (!virt_addr_valid(bio->bi_io_vec)))
+		goto end;
+
 	bv_page = (struct page *)(bio->bi_io_vec[0].bv_page);
 
 	if (IS_ERR_OR_NULL(bv_page) || PageSlab(bv_page) || PageSwapCache(bv_page))
 		goto end;
 
-	addr_space = (struct address_space *)(bv_page->mapping);
-	if (IS_ERR_OR_NULL(addr_space))
-		goto end;
-
 	if (PageAnon(bv_page)) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
 		iomap_dio = (struct iomap_dio  *)bio->bi_private;
-		if (IS_ERR_OR_NULL(iomap_dio)) {
+		if (IS_ERR_OR_NULL(iomap_dio) || (!virt_addr_valid(iomap_dio))) {
 			goto end;
 		}
 
 		iocb = (struct kiocb *)iomap_dio->iocb;
-		if (IS_ERR_OR_NULL(iocb)) {
+		if (IS_ERR_OR_NULL(iocb) || (!virt_addr_valid(iocb))) {
 			goto end;
 		}
 
@@ -480,6 +479,10 @@ static struct inode *bio2inode(struct bio *bio, struct inode **inode)
 			*inode = (struct inode *)dio->inode;
 #endif
 	} else {
+		addr_space = (struct address_space *)(bv_page->mapping);
+		if (IS_ERR_OR_NULL(addr_space) || !virt_addr_valid(addr_space))
+			goto end;
+
 		*inode = addr_space->host;
 	}
 
@@ -655,15 +658,12 @@ static char *get_launcher(char *lname)
 	unsigned long entries[MAX_ST_ENTRIES] = {0, };
 	char         *launcher_name;
 	char        **result;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 2, 0)
-	struct stack_trace trace;
-#endif
 
-	launcher_name = lname;
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 2, 0) \
+	|| (DISTRIBUTION == DISTRIBUTION_KYLIN && defined(CONFIG_ARCH_STACKWALK))
 	nr_entries = stack_trace_save(entries, 32, 0);
 #else
+	struct stack_trace trace;
 	trace.nr_entries  = 0;
 	trace.max_entries = MAX_ST_ENTRIES;
 	trace.entries     = entries;
@@ -671,6 +671,7 @@ static char *get_launcher(char *lname)
 	save_stack_trace(&trace);
 	nr_entries        = trace.nr_entries;
 #endif
+	launcher_name = lname;
 	if (nr_entries < 2) {
 		ret = sprintf(lname, "%s", "unparsed");
 		goto end_launcher;

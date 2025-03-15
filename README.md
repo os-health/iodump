@@ -9,8 +9,9 @@
   - 三、[工具安装](#工具安装)
     - 3.1、[rpm包打包方法1](#rpm包打包方法1)
     - 3.2、[rpm包打包方法2](#rpm包打包方法2)
-    - 3.3、[deb包打包方法](#deb包打包方法)
-    - 3.4、[源代码编译安装](#源代码编译安装)
+    - 3.3、[rpm包打包方法3](#rpm包打包方法3)
+    - 3.4、[deb包打包方法](#deb包打包方法)
+    - 3.5、[源代码编译安装](#源代码编译安装)
   - 四、[使用说明](#使用说明)
     - 4.1、[基本使用](#基本使用)
     - 4.2、[参数说明](#参数说明)
@@ -22,7 +23,7 @@
     - 6.3、[再谈数据有效性](#再谈数据有效性)
   - 七、[使用案例](#使用案例)
     - 7.1、[诊断磁盘io打满](#诊断磁盘io打满)
-    - 7.2、[跟踪点的正确选择](#跟踪点的正确选择)
+    - 7.2、[内存颠簸型磁盘io打满](#内存颠簸型磁盘io打满)
     - 7.3、[诊断元数据io](#诊断元数据io)
     - 7.4、[写类型的元数据io](#写类型的元数据io)
     - 7.5、[获取元数据io的文件信息](#获取元数据io的文件信息)
@@ -76,22 +77,29 @@
 
 ```bash
 $ yum install rpm-build rpmdevtools git
-$ rpmdev-setuptree
-$ cd ~/
+$ cd /tmp/                                        # work dir
 $ git clone https://gitee.com/anolis/iodump.git
-$ cp iodump/spec/iodump.spec ~/rpmbuild/SPECS/
+$ rpmdev-setuptree
 $ tar -zcvf ~/rpmbuild/SOURCES/iodump-$(cat iodump/spec/iodump.spec |grep Version |awk '{print $2}').tar.gz iodump
+$ cp iodump/spec/iodump.spec ~/rpmbuild/SPECS/
 $ rpmbuild -bb ~/rpmbuild/SPECS/iodump.spec
 $ cd ~/rpmbuild/RPMS/x86_64/
-$ sudo rpm -ivh iodump-$(uname -r)-*.an8.x86_64.rpm
-$ sudo rpm -e iodump-$(uname -r)                   # remove package
+$ sudo rpm -ivh $(ls)
+$ sudo rpm -e iodump-$(uname -r)                  # remove package
 ```
 
 &emsp;&emsp;iodump工具本质上是内核驱动模块，在一个特定内核版本上生成的rpm包在另外一个不同的内核版本上是不能正常工作的。在这里我们将内核版本信息加入到rpm包的name部分，用以识别不同内核版本的rpm包。这里我们推荐使用如下rpm的查询命令区分一个rpm包的name、version、release和arch四个部分的内容。我们使用连续的3横线来区隔不同的部分，结果一目了然。
 
 ```bash
-$ rpm -qp iodump-4.19.91-24.8.an8.x86_64-1.0.1-1.an8.x86_64.rpm --queryformat="%{name}---%{version}---%{release}---%{arch}\n"
-iodump-4.19.91-24.8.an8.x86_64---1.0.1---1.an8---x86_64
+$ rpm -qp iodump-4.19.91-24.8-1.0.1-1.an8.x86_64.rpm --queryformat="%{name}---%{version}---%{release}---%{arch}\n"
+iodump-4.19.91-24.8---1.0.1---1.an8---x86_64
+```
+
+&emsp;&emsp;使用这个方法打rpm，默认会依赖当前机器上默认第一个kernel-devel包。如果想指定版本的kernel-devel包，可以使用如下rpmbuild命令通过宏参数传入内核版本信息。
+
+```bash
+$ rpmbuild -bb ~/rpmbuild/SPECS/iodump.spec --define "%kver $(uname -r)"
+$ rpmbuild -bb ~/rpmbuild/SPECS/iodump.spec --define "%kver 4.19.91-24.8.an8.x86_64"
 ```
 
 <a name="rpm包打包方法2" ></a>
@@ -129,20 +137,62 @@ iodump-4.19.91-24.8.an8.x86_64---1.0.1---1.an8---x86_64
 ```bash
 $ rpm -ivh --force kernel-devel-4.19.91-25.8.an8.x86_64.rpm kernel-devel-4.19.91-26.an8.x86_64.rpm
 $ yum install rpm-build rpmdevtools git
+$ cd /tmp/                                        # work dir
+$ git clone https://gitee.com/anolis/iodump.git
+$ rpmdev-setuptree
+$ tar -zcvf ~/rpmbuild/SOURCES/iodump-$(cat iodump/spec/distribution.spec |grep Version |awk '{print $2}').tar.gz iodump
+$ cp iodump/spec/distribution.spec ~/rpmbuild/SPECS/
+$ rpmbuild -bb ~/rpmbuild/SPECS/distribution.spec
+$ cd ~/rpmbuild/RPMS/x86_64/
+$ rpm -qpl $(ls) | grep kiodump                   # display all version kiodump 
+$ sudo rpm -ivh $(ls)
+$ sudo rpm -e iodump                              # remove package
+```
+
+<a name="rpm包打包方法3" ></a>
+
+### 3.3、rpm包打包方法3
+
+&emsp;&emsp;在一些大型互联网公司，会在低版本发行版上使用较高版本内核的情况。比如centos7的原装内核版本是3.10，但是为了支持业务需求，在centos7的发行版上将内核升级为更高版本，如4.18内核。本方法适用于这种场景
+
+&emsp;&emsp;这里以centos7为例，假设这里当前某公司同时使用了6个版本的内核，分别是3.10.0-1062、3.10.0-1127、3.10.0-1160、4.18.0-240、4.18.0-305和4.18.0-348。我们需要基于centos7发行版，制作2个docker镜像。
+
+&emsp;&emsp;第一个docker镜像中包含3个3.10内核版本，需要安装如下软件包，命名为image-centos7。
+
+```bash
+$ yum install rpm-build
+$ rpm -ivh --force kernel-devel-3.10.0-1062.el7.x86_64.rpm kernel-devel-3.10.0-1127.el7.x86_64.rpm kernel-devel-3.10.0-1160.el7.x86_64.rpm
+```
+
+&emsp;&emsp;第二个docker镜像中包含3个4.18内核版本，需要安装如下软件包，命名为image-centos8。
+
+```bash
+$ yum install rpm-build
+$ rpm -ivh --force kernel-devel-4.18.0-240.el8.x86_64.rpm kernel-devel-4.18.0-305.el8.x86_64.rpm kernel-devel-4.18.0-348.el8.x86_64.rpm
+$ rpm -Uvh gcc-8.5.0-4.el8_5.x86_64.rpm                        # 具体需要升级的gcc相关rpm包参考公司内部资料
+```
+
+&emsp;&emsp;然后，具体打包方案如下：
+
+```bash
+$ yum install rpmdevtools git docker
 $ rpmdev-setuptree
 $ cd ~/
 $ git clone https://gitee.com/anolis/iodump.git
-$ cp iodump/spec/distribution.spec ~/rpmbuild/SPECS/
-$ tar -zcvf ~/rpmbuild/SOURCES/iodump-$(cat iodump/spec/iodump.spec |grep Version |awk '{print $2}').tar.gz iodump
-$ rpmbuild -bb ~/rpmbuild/SPECS/distribution.spec
+$ tar -zcvf ~/rpmbuild/SOURCES/iodump-$(cat iodump/spec/docker.spec |grep Version |awk '{print $2}').tar.gz iodump
+$ cp iodump/spec/docker.spec ~/rpmbuild/SPECS/
+$ docker run --net=host -u root -v ~/rpmbuild:/root/rpmbuild -w /root/rpmbuild -it image-centos8 /bin/bash -c "rpmbuild -bb /root/rpmbuild/SPECS/docker.spec"
+$ docker run --net=host -u root -v ~/rpmbuild:/root/rpmbuild -w /root/rpmbuild -it image-centos7 /bin/bash -c "rpmbuild -bb /root/rpmbuild/SPECS/docker.spec"
+$ rm -fr ~/rpmbuild/SPECS/kiodump/                             # clear kiodump.ko
 $ cd ~/rpmbuild/RPMS/x86_64/
+$ rpm -qpl iodump-*.an8.x86_64.rpm | grep kiodump              # display all version kiodump 
 $ sudo rpm -ivh iodump-*.an8.x86_64.rpm
 $ sudo rpm -e iodump                                           # remove package
 ```
 
 <a name="deb包打包方法" ></a>
 
-### 3.3、deb包打包方法
+### 3.4、deb包打包方法
 
 &emsp;&emsp;deb包的打包方法如下，本方法适用于Ubuntu等操作系统环境。
 
@@ -159,7 +209,7 @@ $ dpkg -r iodump-4.4.0-87-generic                              # remove package
 
 <a name="源代码编译安装" ></a>
 
-### 3.4、源代码编译安装
+### 3.5、源代码编译安装
 
 &emsp;&emsp;源代码安装方法。
 

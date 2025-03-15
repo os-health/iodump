@@ -1,9 +1,7 @@
 %global __os_install_post %{nil}
 %define _ignore_post_scripts_errors %{nil}
-%define _enable_debug_packages %{nil}
-%define debug_package  %{nil}
 %define all_kver       %(ls /usr/src/kernels/ | cat)
-%define anolis_release 1
+%define anolis_release 6
 
 Name:                  iodump
 Version:               1.0.1
@@ -15,6 +13,11 @@ License:               MIT
 Source0:               %{name}-%{version}.tar.gz
 
 Vendor:                Alibaba
+
+BuildRequires: elfutils-devel
+
+# Add debug package
+%debug_package
 
 %description
 dump the io details 
@@ -58,14 +61,14 @@ install $BuildDir/kernel/kiodump.conf  %{buildroot}/usr/src/os_health/iodump/kio
 install -d                             %{buildroot}/usr/sbin/
 install $BuildDir/user/iodump          %{buildroot}/usr/sbin/iodump
 
-%clean
-[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf "$RPM_BUILD_ROOT"
-
 %files
 %defattr(-,root,root,-)
    /usr/sbin/iodump
    /usr/lib/iodump/
    /usr/src/os_health/iodump/kiodump.conf
+
+%clean
+[ "$RPM_BUILD_ROOT" != "/" ] && rm -rf "$RPM_BUILD_ROOT"
 
 %pre
 ret=$(echo "%{all_kver}" | grep -w $(uname -r))
@@ -109,6 +112,21 @@ if [ "$1" = "0" ]; then
 fi
 
 %changelog
+* Tue Mar 05 2024 wangxiaomeng <wangxiaomeng@kylinos.cn> - 1.0.1-6
+- Fix crash when executing mkfs.xfs
+
+* Mon Feb 05 2024 wangxiaomeng <wangxiaomeng@kylinos.cn> - 1.0.1-5
+- Add debug_package
+
+* Mon Feb 05 2024 wangxiaomeng <wangxiaomeng@kylinos.cn> - 1.0.1-4
+- Fix crash when executing mkfs.xfs
+
+* Mon Sep 25 2023 wangxiaomeng <wangxiaomeng@kylinos.cn> - 1.0.1-3
+- Add BuildRequires: elfutils-devel
+
+* Wed Sep 20 2023 wangxiaomeng <wangxiaomeng@kylinos.cn> - 1.0.1-2
+- Fix compilation errors on x86 for kylin v10
+
 * Wed Aug 24 2022 MilesWen <mileswen@linux.alibaba.com> - 1.0.1-1
 - Release iodump RPM package
 --end
