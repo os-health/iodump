@@ -451,7 +451,12 @@ static struct inode *bio2inode(struct bio *bio, struct inode **inode)
 
 	bv_page = (struct page *)(bio->bi_io_vec[0].bv_page);
 
-	if (IS_ERR_OR_NULL(bv_page) || PageSlab(bv_page) || PageSwapCache(bv_page))
+	if (IS_ERR_OR_NULL(bv_page) || PageSlab(bv_page)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 12, 0)
+		|| folio_test_swapcache(page_folio(bv_page)))
+#else
+		|| PageSwapCache(bv_page))
+#endif
 		goto end;
 
 	if (PageAnon(bv_page)) {
@@ -930,7 +935,10 @@ static void blk_trace_rq_handler(struct request_queue *q, struct request *rq)
 
 	iit.sector = rq->__sector;
 	iit.partno = 0;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 9, 0)
+	if (rq->part)
+		iit.partno = bdev_partno(rq->part);
+#elif LINUX_VERSION_CODE >= KERNEL_VERSION(5, 11, 0)
 	if (rq->part)
 		iit.partno = rq->part->bd_partno;
 #elif LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
